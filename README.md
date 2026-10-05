@@ -29,7 +29,7 @@ Zonder `server.py` (bijvoorbeeld via GitHub Pages) probeert de app de API rechts
 
 - **Geregistreerde misdrijven, geen aangiften.** Een misdrijf telt als de politie het heeft vastgelegd in een proces-verbaal van aangifte of een ambtshalve proces-verbaal. Pogingen tellen mee.
 - **Misdrijven met aangifte** (in de tabel: Aangiften) zijn geregistreerde misdrijven waarvoor een proces-verbaal van aangifte is opgesteld. Per misdrijf kunnen meerdere aangiften gedaan zijn; het cijfer telt misdrijven, niet aangiften. Alleen op gemeenteniveau.
-- **Aangiften lopen achter.** In september 2026 waren de aangiftecijfers twee maanden minder ver bijgewerkt dan de misdrijfcijfers. De app gebruikt per meetwaarde de laatste beschikbare maand.
+- **Aangiften lopen achter.** Bij een controle in oktober 2026 (gemeente Wageningen) liepen de aangiftecijfers twee maanden achter op de misdrijfcijfers. Of dat voor alle gemeenten geldt, is niet gecontroleerd. De app gebruikt per meetwaarde de laatste beschikbare maand.
 - **Alleen maandcijfers.** De politie publiceert per maand, rond de 15e van de volgende maand. Weekcijfers bestaan niet.
 - **Groei of afname** wordt vergeleken met dezelfde periode een jaar eerder (geen seizoenseffect) en, bij 1 en 3 maanden, met de voorgaande periode.
 - **Toevalsindicatie:** z = (A − B) / √(A + B), een benadering voor het verschil tussen twee telgetallen (Poisson). Bij |z| < 2 is het verschil goed verklaarbaar door toeval. Dit is een vuistregel, geen formele toets.
