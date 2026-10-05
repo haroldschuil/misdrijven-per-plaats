@@ -57,25 +57,49 @@ details summary{cursor:pointer;font-weight:600}
 code{font-family:var(--mono);font-size:12.5px}
 a{color:var(--a)}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg label{padding:9px 12px;cursor:pointer;font-size:14px;background:var(--bg)}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg input:checked + span{font-weight:700}
+.seg label:has(input:checked){background:var(--ink);color:var(--panel)}
+.seg label:has(input:focus-visible){outline:2px solid var(--a);outline-offset:-2px}
+.rate{font:500 15px/1.3 var(--mono);margin-top:8px;font-variant-numeric:tabular-nums}
+.summary{font-size:15px}
+.summary .calc{font:12.5px/1.4 var(--mono);color:var(--muted);margin-top:6px;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <div class="lbl">Politie open data · tabel 47015NED</div>
+    <div class="lbl">Politie open data · tabellen 47015NED en 47013NED</div>
     <h1>Misdrijven per plaats</h1>
-    <p>Door de politie geregistreerde misdrijven per woonplaats en per soort misdrijf, met de ontwikkeling ten opzichte van een jaar eerder. Cijfers komen live uit de open-data-API van data.politie.nl (CBS Statline voor derden).</p>
+    <p>Door de politie geregistreerde misdrijven en aangiften per woonplaats of gemeente, met de ontwikkeling ten opzichte van een jaar eerder. Op gemeenteniveau ook per 1.000 inwoners. Cijfers komen live uit de open-data-API's van data.politie.nl en het CBS.</p>
   </header>
 
   <section class="panel">
     <form id="f">
       <div class="field">
-        <label class="lbl" for="placeA"><span class="dot" style="background:var(--a)"></span>Plaats</label>
+        <span class="lbl">Niveau</span>
+        <div class="seg" role="radiogroup" aria-label="Niveau">
+          <label><input type="radio" name="level" id="lvlPlaats" value="plaats"><span>Woonplaats</span></label>
+          <label><input type="radio" name="level" id="lvlGemeente" value="gemeente" checked><span>Gemeente</span></label>
+        </div>
+      </div>
+      <div class="field">
+        <label class="lbl" for="placeA"><span class="dot" style="background:var(--a)"></span><span id="lblA">Gemeente</span></label>
         <input id="placeA" list="places" autocomplete="off" value="Wageningen">
       </div>
       <div class="field">
+        <label class="chk" for="cmp"><input type="checkbox" id="cmp" checked> <span class="dot" style="background:var(--b);margin:0"></span>Vergelijk met</label>
+        <input id="placeB" list="places" autocomplete="off" value="Ede" aria-label="Tweede plaats">
+      </div>
+      <div class="field">
         <label class="lbl" for="crime">Soort misdrijf</label>
-        <select id="crime"><option value="0.0.0 ">Totaal misdrijven</option></select>
+        <select id="crime"></select>
+      </div>
+      <div class="field" id="measureField">
+        <label class="lbl" for="measure">Meetwaarde</label>
+        <select id="measure"></select>
       </div>
       <div class="field">
         <label class="lbl" for="span">Tijdsspanne</label>
@@ -86,20 +110,18 @@ a{color:var(--a)}
           <option value="Y">Laatste volledige kalenderjaar</option>
         </select>
       </div>
-      <div class="field">
-        <label class="chk" for="cmp"><input type="checkbox" id="cmp" checked> Vergelijk met tweede plaats</label>
-        <input id="placeB" list="places" autocomplete="off" value="Ede" aria-label="Tweede plaats">
-      </div>
       <div class="field"><button class="go" type="submit" id="go">Toon cijfers</button></div>
       <datalist id="places"></datalist>
     </form>
-    <p class="status" id="status" style="margin:12px 0 0">Plaatsen en delicten laden…</p>
+    <p class="status" id="status" style="margin:12px 0 0">Gegevens laden…</p>
   </section>
+
+  <section class="panel summary" id="summary" hidden></section>
 
   <section class="cards" id="cards"></section>
 
   <section class="panel" id="chartPanel" hidden>
-    <div class="lbl" style="margin-bottom:8px">Verloop per maand, laatste 24 maanden</div>
+    <div class="lbl" style="margin-bottom:8px" id="chartTitle">Verloop per maand, laatste 24 maanden</div>
     <div class="legend" id="legend"></div>
     <div class="chartbox" id="chart"></div>
   </section>
@@ -108,256 +130,351 @@ a{color:var(--a)}
     <details>
       <summary>Hoe deze cijfers tot stand komen en wat ze niet zeggen</summary>
       <ul class="method">
-        <li><b>Geregistreerde misdrijven, niet aangiften.</b> De politie telt een registratie als misdrijf als er een aangifte, slachtoffer of verdachte aan gekoppeld is. Ook ambtshalve opgemaakte processen-verbaal tellen mee. Pogingen tellen mee.</li>
-        <li><b>Geen weekcijfers.</b> De politie publiceert per maand, rond de 15e van de volgende maand. De laatst beschikbare maand staat bij elke uitkomst.</li>
+        <li><b>Twee niveaus.</b> Woonplaats gebruikt tabel 47015NED (alleen geregistreerde misdrijven). Gemeente gebruikt tabel 47013NED (geregistreerde misdrijven, misdrijven met aangifte en internetaangiften), gemeentelijke indeling 1 januari 2026.</li>
+        <li><b>Geregistreerde misdrijven.</b> De politie telt een registratie als misdrijf als er een aangifte, slachtoffer of verdachte aan gekoppeld is. Ook ambtshalve opgemaakte processen-verbaal tellen mee. Pogingen tellen mee.</li>
+        <li><b>Misdrijven met aangifte</b> (in de tabel: Aangiften) zijn geregistreerde misdrijven waarvoor een proces-verbaal van aangifte is opgesteld. Per misdrijf kunnen meerdere aangiften gedaan zijn; het cijfer telt dus misdrijven, niet het aantal aangiften. <b>Internetaangiften</b> kunnen alleen voor een beperkt aantal delicten en alleen als er geen opsporingsindicatie is.</li>
+        <li><b>Aangiften lopen achter.</b> In september 2026 waren de aangiftecijfers twee maanden minder ver bijgewerkt dan de misdrijfcijfers. De app gebruikt per meetwaarde de laatste maand waarvoor die meetwaarde beschikbaar is en vermeldt die maand.</li>
+        <li><b>Geen weekcijfers.</b> De politie publiceert per maand, rond de 15e van de volgende maand.</li>
         <li><b>Groei of afname</b> wordt vergeleken met dezelfde periode een jaar eerder, om seizoenseffecten te vermijden. Daarnaast staat de vergelijking met de direct voorgaande periode van gelijke lengte.</li>
-        <li><b>Toevalsindicatie.</b> Bij kleine aantallen schommelen cijfers sterk. De app berekent z = (A − B) / √(A + B), een benadering voor het verschil tussen twee telgetallen (Poisson). Bij |z| &lt; 2 is het verschil goed verklaarbaar door toeval. Dit is een vuistregel, geen formele toets.</li>
-        <li><b>Plaatsen vergelijken.</b> De tabel bevat geen inwonertallen. Absolute aantallen van plaatsen met verschillende omvang zijn daarom niet één op één vergelijkbaar. Vergelijk vooral de ontwikkeling in procenten.</li>
-        <li><b>Niet per maand gepubliceerd:</b> zedendelicten, kinderporno, kinderprostitutie en maatschappelijke integriteit (overig) zijn in deze tabel verborgen. De app meldt dat als je zo'n delict kiest.</li>
+        <li><b>Toevalsindicatie.</b> De app berekent z = (A − B) / √(A + B), een benadering voor het verschil tussen twee telgetallen (Poisson). Bij |z| &lt; 2 is het verschil goed verklaarbaar door toeval. Dit is een vuistregel, geen formele toets.</li>
+        <li><b>Per 1.000 inwoners</b> (alleen gemeenten): aantal / inwoners × 1.000. Noemer: bij een kalenderjaar de gemiddelde bevolking van dat jaar, bij een maandperiode het aantal inwoners op 1 januari van het jaar waarin de periode eindigt (CBS-tabel 03759ned). De grafiek deelt alle maanden door dat ene inwonertal. Voor woonplaatsen publiceert het CBS dit cijfer niet in die tabel, dus daar vergelijk je alleen absolute aantallen en procentuele ontwikkeling.</li>
+        <li><b>Verborgen delicten:</b> zedendelicten, kinderporno, kinderprostitutie en maatschappelijke integriteit (overig) worden niet per maand gepubliceerd. Op gemeenteniveau zijn wel jaarcijfers beschikbaar; kies dan "Laatste volledige kalenderjaar".</li>
         <li><b>Cijfers veranderen achteraf.</b> De politie actualiseert met terugwerkende kracht, dus de meest recente maanden kunnen nog wijzigen.</li>
-        <li>Bron: <a href="https://data.politie.nl/#/Politie/nl/dataset/47015NED/table" target="_blank" rel="noopener">data.politie.nl, tabel 47015NED</a>. API: <code>https://dataderden.cbs.nl/ODataApi/OData/47015NED</code>. Definities: <a href="https://www.politie.nl/algemeen/dataportaal/dataportaal-definities.html" target="_blank" rel="noopener">politie.nl dataportaal-definities</a>.</li>
+        <li>Bronnen: <a href="https://data.politie.nl/#/Politie/nl/dataset/47015NED/table" target="_blank" rel="noopener">47015NED</a>, <a href="https://data.politie.nl/#/Politie/nl/dataset/47013NED/table" target="_blank" rel="noopener">47013NED</a> (data.politie.nl), <a href="https://opendata.cbs.nl/statline/#/CBS/nl/dataset/03759ned/table" target="_blank" rel="noopener">03759ned</a> (CBS). Definities: <a href="https://www.politie.nl/algemeen/dataportaal/dataportaal-definities.html" target="_blank" rel="noopener">politie.nl dataportaal-definities</a>.</li>
       </ul>
     </details>
   </section>
 </div>
 
 <script>
-const DIRECT = "https://dataderden.cbs.nl/ODataApi/OData/47015NED";
-const PROXY = "/odata/47015NED";   // via server.py
-let API = DIRECT;
-// Delictlijst uit de API (SoortMisdrijf, 47015NED), vast ingebouwd zodat de keuzelijst altijd werkt
+const HOSTS = {
+  dataderden: "https://dataderden.cbs.nl/ODataApi/OData/",
+  opendata:   "https://opendata.cbs.nl/ODataApi/OData/"
+};
+const LEVELS = {
+  plaats:   {table:"47015NED", host:"dataderden", dim:"Plaatsen", label:"Woonplaats", keyFilter:"",
+             measures:[["GeregistreerdeMisdrijven_1","Geregistreerde misdrijven"]]},
+  gemeente: {table:"47013NED", host:"dataderden", dim:"RegioS",   label:"Gemeente", keyFilter:"startswith(Key,'GM')",
+             measures:[["GeregistreerdeMisdrijven_1","Geregistreerde misdrijven"],["Aangiften_2","Misdrijven met aangifte"],["Internetaangiften_3","Internetaangiften"]]}
+};
+const POP = {table:"03759ned", host:"opendata"};
+// Delictlijst (SoortMisdrijf; gelijk in 47015NED en 47013NED), vast ingebouwd zodat de keuzelijst altijd werkt
 const CRIMES = [["0.0.0 ","Totaal misdrijven"],["1.1.1 ","1.1.1 Diefstal/inbraak woning"],["1.1.2 ","1.1.2 Diefstal/inbraak box/garage/schuur"],["1.2.1 ","1.2.1 Diefstal uit/vanaf motorvoertuigen"],["1.2.2 ","1.2.2 Diefstal van motorvoertuigen"],["1.2.3 ","1.2.3 Diefstal van brom-, snor-, fietsen"],["1.2.4 ","1.2.4 Zakkenrollerij"],["1.2.5 ","1.2.5 Diefstal af/uit/van ov. voertuigen"],["1.3.1 ","1.3.1 Ongevallen (weg)"],["1.4.1 ","1.4.1 Zedendelicten"],["1.4.2 ","1.4.2 Moord, doodslag"],["1.4.3 ","1.4.3 Openlijk geweld (persoon)"],["1.4.4 ","1.4.4 Bedreiging"],["1.4.5 ","1.4.5 Mishandeling"],["1.4.6 ","1.4.6 Straatroof"],["1.4.7 ","1.4.7 Overval"],["1.5.2 ","1.5.2 Diefstallen (water)"],["1.6.1 ","1.6.1 Brand/ontploffing"],["1.6.2 ","1.6.2 Overige vermogensdelicten"],["1.6.3 ","1.6.3 Mensenhandel"],["2.1.1 ","2.1.1 Drugs/drankoverlast"],["2.2.1 ","2.2.1 Vernieling cq. zaakbeschadiging"],["2.4.1 ","2.4.1 Burengerucht (relatieproblemen)"],["2.4.2 ","2.4.2 Huisvredebreuk"],["2.5.1 ","2.5.1 Diefstal/inbraak bedrijven enz."],["2.5.2 ","2.5.2 Winkeldiefstal"],["2.6.1 ","2.6.1 Inrichting Wet Milieubeheer"],["2.6.2 ","2.6.2 Bodem"],["2.6.3 ","2.6.3 Water"],["2.6.4 ","2.6.4 Afval"],["2.6.5 ","2.6.5 Bouwstoffen"],["2.6.7 ","2.6.7 Mest"],["2.6.8 ","2.6.8 Transport gevaarlijke stoffen"],["2.6.9 ","2.6.9 Vuurwerk"],["2.6.10","2.6.10 Bestrijdingsmiddelen"],["2.6.11","2.6.11 Natuur en landschap"],["2.6.12","2.6.12 Ruimtelijke ordening"],["2.6.13","2.6.13 Dieren"],["2.6.14","2.6.14 Voedselveiligheid"],["2.7.2 ","2.7.2 Bijzondere wetten"],["2.7.3 ","2.7.3 Leefbaarheid (overig)"],["3.1.1 ","3.1.1 Drugshandel"],["3.1.2 ","3.1.2 Mensensmokkel"],["3.1.3 ","3.1.3 Wapenhandel"],["3.2.1 ","3.2.1 Kinderporno"],["3.2.2 ","3.2.2 Kinderprostitutie"],["3.3.2 ","3.3.2 Onder invloed (lucht)"],["3.3.5 ","3.3.5 Lucht (overig)"],["3.4.2 ","3.4.2 Onder invloed (water)"],["3.5.2 ","3.5.2 Onder invloed (weg)"],["3.5.5 ","3.5.5 Weg (overig)"],["3.6.4 ","3.6.4 Aantasting openbare orde"],["3.7.1 ","3.7.1 Discriminatie"],["3.7.2 ","3.7.2 Vreemdelingenzorg"],["3.7.3 ","3.7.3 Maatsch. integriteit (overig)"],["3.7.4 ","3.7.4 Cybercrime"],["3.9.1 ","3.9.1 Horizontale fraude"],["3.9.2 ","3.9.2 Verticale fraude"],["3.9.3 ","3.9.3 Fraude (overig)"]];
+
 const MONTHS = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
 const MONTHS_LONG = ["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
 const $ = id => document.getElementById(id);
-let placeByLabel = new Map();  // label in invoerveld -> Key
-let placeLabelByKey = new Map();
-let crimeTitle = new Map();
-
 const nf = new Intl.NumberFormat("nl-NL");
+const nf2 = new Intl.NumberFormat("nl-NL",{maximumFractionDigits:2,minimumFractionDigits:2});
 const pf = new Intl.NumberFormat("nl-NL",{maximumFractionDigits:1,minimumFractionDigits:1,signDisplay:"exceptZero"});
 
+let viaProxy = false;
+const placeLists = {};   // per niveau: {byLabel, labelByKey, labels}
+const popCache = new Map();
+let crimeTitle = new Map(CRIMES);
+
+const api = (host, path) => viaProxy ? "/odata/" + path : HOSTS[host] + path;
 async function getJSON(url){
   const r = await fetch(url);
   if(!r.ok) throw new Error("HTTP " + r.status);
   return r.json();
 }
-
 function setStatus(t, err){ const s=$("status"); s.textContent=t; s.classList.toggle("err",!!err); }
+const level = () => document.querySelector("input[name=level]:checked").value;
 
-function fillCrimes(list){
-  const sel = $("crime"); sel.innerHTML = "";
-  list.forEach(([k,t])=>{
-    crimeTitle.set(k,t);
-    const o=document.createElement("option"); o.value=k; o.textContent=t; sel.appendChild(o);
-  });
-}
-
-async function pickApi(){
-  // Eerst via server.py (zelfde adres), anders rechtstreeks naar de politie-API
+async function pickRoute(){
   if(location.protocol.startsWith("http")){
-    try{ const r = await fetch(PROXY + "/TableInfos?$select=Identifier"); if(r.ok){ await r.json(); API = PROXY; return "via server.py"; } }catch(e){}
+    try{ const r = await fetch("/odata/47015NED/TableInfos?$select=Identifier"); if(r.ok){ await r.json(); viaProxy = true; } }catch(e){}
   }
-  API = DIRECT; return "rechtstreeks";
+  return viaProxy ? "via server.py" : "rechtstreeks";
 }
 
-async function init(){
-  fillCrimes(CRIMES);
-  const route = await pickApi();
-  try{
-    const [pl, sm] = await Promise.all([
-      getJSON(API + "/Plaatsen?$select=Key,Title,Description"),
-      getJSON(API + "/SoortMisdrijf?$select=Key,Title")
-    ]);
-    // Dubbele plaatsnamen (bijv. twee keer Hengelo) krijgen de gemeente erbij
-    const count = {};
-    pl.value.forEach(p => count[p.Title] = (count[p.Title]||0)+1);
-    const dl = $("places");
-    pl.value.sort((a,b)=>a.Title.localeCompare(b.Title,"nl")).forEach(p=>{
-      const label = count[p.Title] > 1 ? `${p.Title} (${(p.Description||p.Key).replace(/^Gemeente /,"gem. ")})` : p.Title;
-      placeByLabel.set(label.toLowerCase(), p.Key);
-      placeLabelByKey.set(p.Key, label);
-      const o = document.createElement("option"); o.value = label; dl.appendChild(o);
-    });
-    fillCrimes(sm.value.map(c=>[c.Key,c.Title]));  // actuele lijst uit de API
-    setStatus(`${nf.format(pl.value.length)} plaatsen en ${sm.value.length} soorten misdrijf geladen (${route}).`);
-    run();
-  }catch(e){
-    setStatus("Je browser kan de politie-API niet rechtstreeks bereiken (" + e.message + "). Dit is meestal de CORS-beveiliging van de browser. Oplossing: zet server.py in dezelfde map als dit bestand en start het met 'python3 server.py' (Windows: 'py server.py'). De app opent dan op http://localhost:8000.", true);
-  }
+async function loadPlaces(lv){
+  if(placeLists[lv]) return placeLists[lv];
+  const L = LEVELS[lv];
+  let q = `${L.table}/${L.dim}?$select=Key,Title,Description`;
+  if(L.keyFilter) q += "&$filter=" + encodeURIComponent(L.keyFilter);
+  const d = await getJSON(api(L.host, q));
+  const count = {};
+  d.value.forEach(p => count[p.Title] = (count[p.Title]||0)+1);
+  const byLabel = new Map(), labelByKey = new Map(), labels = [];
+  d.value.sort((a,b)=>a.Title.localeCompare(b.Title,"nl")).forEach(p=>{
+    const key = p.Key.trim();
+    const label = count[p.Title] > 1 ? `${p.Title} (${(p.Description||key).replace(/^Gemeente /,"gem. ")})` : p.Title;
+    byLabel.set(label.toLowerCase(), key); labelByKey.set(key, label); labels.push(label);
+  });
+  return placeLists[lv] = {byLabel, labelByKey, labels};
 }
 
-function resolvePlace(text){
-  const t = text.trim().toLowerCase();
-  if(!t) return null;
-  if(placeByLabel.has(t)) return placeByLabel.get(t);
-  // geen exacte match: eerste label dat met de tekst begint
-  for(const [lab,key] of placeByLabel) if(lab.startsWith(t)) return key;
+function fillSelect(sel, pairs, keep){
+  const prev = sel.value; sel.innerHTML = "";
+  pairs.forEach(([k,t])=>{ const o=document.createElement("option"); o.value=k; o.textContent=t; sel.appendChild(o); });
+  if(keep && pairs.some(p=>p[0]===prev)) sel.value = prev;
+}
+
+async function applyLevel(){
+  const lv = level(), L = LEVELS[lv];
+  $("lblA").textContent = L.label;
+  fillSelect($("measure"), L.measures, true);
+  $("measureField").hidden = L.measures.length < 2;
+  const pl = await loadPlaces(lv);
+  const dl = $("places"); dl.innerHTML = "";
+  const frag = document.createDocumentFragment();
+  pl.labels.forEach(l=>{ const o=document.createElement("option"); o.value=l; frag.appendChild(o); });
+  dl.appendChild(frag);
+  return pl;
+}
+
+function resolvePlace(lv, text){
+  const t = text.trim().toLowerCase(), pl = placeLists[lv];
+  if(!t || !pl) return null;
+  if(pl.byLabel.has(t)) return pl.byLabel.get(t);
+  for(const [lab,key] of pl.byLabel) if(lab.startsWith(t)) return key;
   return null;
 }
 
-const idx = p => { const y=+p.slice(0,4), m=+p.slice(6,8); return y*12 + (m-1); };
+const idx = p => +p.slice(0,4)*12 + (+p.slice(6,8)-1);
 const lab = i => `${MONTHS[i%12]} ${Math.floor(i/12)}`;
 const labLong = i => `${MONTHS_LONG[i%12]} ${Math.floor(i/12)}`;
 
-async function fetchSeries(placeKey, crimeKey, fromYear){
-  const f = `Plaatsen eq '${placeKey}' and SoortMisdrijf eq '${crimeKey}' and substring(Perioden,0,4) ge '${fromYear}'`;
-  const url = API + "/TypedDataSet?$filter=" + encodeURIComponent(f) + "&$select=Perioden,GeregistreerdeMisdrijven_1";
-  const d = await getJSON(url);
-  const months = new Map(), years = new Map();
-  d.value.forEach(r=>{
-    const v = r.GeregistreerdeMisdrijven_1;
-    if(r.Perioden.includes("MM")) months.set(idx(r.Perioden), v);
-    else if(r.Perioden.includes("JJ")) years.set(+r.Perioden.slice(0,4), v);
+async function fetchSeries(lv, key, crimeKey, fromYear){
+  const L = LEVELS[lv];
+  const f = `${L.dim} eq '${key}' and SoortMisdrijf eq '${crimeKey}' and substring(Perioden,0,4) ge '${fromYear}'`;
+  const sel = ["Perioden"].concat(L.measures.map(m=>m[0])).join(",");
+  const d = await getJSON(api(L.host, `${L.table}/TypedDataSet?$filter=${encodeURIComponent(f)}&$select=${sel}`));
+  const out = {};
+  L.measures.forEach(([m])=>{
+    const months = new Map(), years = new Map();
+    d.value.forEach(r=>{
+      if(r.Perioden.includes("MM")) months.set(idx(r.Perioden), r[m]);
+      else if(r.Perioden.includes("JJ")) years.set(+r.Perioden.slice(0,4), r[m]);
+    });
+    out[m] = {months, years};
   });
-  return {months, years};
+  return out;
 }
 
-// som over n maanden eindigend op 'end'; null als een maand ontbreekt
+// Bevolking per gemeente en jaar (CBS 03759ned): {jan: op 1 januari, avg: gemiddeld over het jaar}
+async function popRow(gmKey, y){
+  const ck = gmKey + "|" + y;
+  if(popCache.has(ck)) return popCache.get(ck);
+  let res = null;
+  try{
+    const f = `RegioS eq '${gmKey}' and Perioden eq '${y}JJ00'`;
+    const d = await getJSON(api(POP.host, `${POP.table}/TypedDataSet?$filter=${encodeURIComponent(f)}&$select=Geslacht,Leeftijd,BurgerlijkeStaat,BevolkingOp1Januari_1,GemiddeldeBevolking_2`));
+    const row = d.value.find(r => r.Geslacht.trim()==="T001038" && r.Leeftijd.trim()==="10000" && r.BurgerlijkeStaat.trim()==="T001019");
+    if(row) res = {jan: row.BevolkingOp1Januari_1, avg: row.GemiddeldeBevolking_2};
+  }catch(e){}
+  popCache.set(ck, res);
+  return res;
+}
+// Kalenderjaar: gemiddelde bevolking van dat jaar. Maandperiode: inwoners op 1 januari van het jaar waarin de periode eindigt.
+async function population(gmKey, span, latest){
+  if(span==="Y"){
+    const y = (latest%12===11) ? Math.floor(latest/12) : Math.floor(latest/12)-1;
+    const r = await popRow(gmKey, y);
+    if(r && r.avg!=null) return {n: r.avg, year: y, label: `gemiddeld ${y}`};
+    if(r && r.jan!=null) return {n: r.jan, year: y, label: `1 jan ${y}`};
+    return null;
+  }
+  const yEnd = Math.floor(latest/12);
+  for(const y of [yEnd, yEnd-1]){
+    const r = await popRow(gmKey, y);
+    if(r && r.jan!=null) return {n: r.jan, year: y, label: `1 jan ${y}`};
+  }
+  return null;
+}
+
 function sumWin(months, end, n){
   let s=0;
   for(let i=end-n+1;i<=end;i++){ const v=months.get(i); if(v==null) return null; s+=v; }
   return s;
 }
-
 function compare(cur, base){
   if(cur==null || base==null) return null;
   const diff = cur - base;
-  const pct = base>0 ? diff/base*100 : null;
-  const z = (cur+base)>0 ? diff/Math.sqrt(cur+base) : 0;
-  return {cur, base, diff, pct, z};
+  return {cur, base, diff, pct: base>0 ? diff/base*100 : null, z: (cur+base)>0 ? diff/Math.sqrt(cur+base) : 0};
 }
-
 function verdict(c){
   if(!c) return {cls:"flat", txt:"geen gegevens"};
   if(c.diff===0) return {cls:"flat", txt:"gelijk"};
-  const dir = c.diff>0 ? "up":"down";
-  const word = c.diff>0 ? "toename":"afname";
-  const strong = Math.abs(c.z) >= 2;
-  return {cls: strong?dir:"flat", txt: (c.pct!=null? pf.format(c.pct)+"%":"n.v.t.") + " " + word + (strong?"":" (binnen toeval)")};
+  const strong = Math.abs(c.z) >= 2, word = c.diff>0 ? "toename":"afname";
+  return {cls: strong ? (c.diff>0?"up":"down") : "flat", txt: (c.pct!=null? pf.format(c.pct)+"%":"n.v.t.") + " " + word + (strong?"":" (binnen toeval)")};
 }
-
 function calcLine(c, a, b){
   if(!c) return "Niet te berekenen: een of meer maanden ontbreken.";
   const pct = c.pct!=null ? `${nf.format(c.diff)} / ${nf.format(c.base)} × 100 = ${pf.format(c.pct)}%` : "basis is 0, percentage niet te berekenen";
-  return `${a}: ${nf.format(c.cur)} t.o.v. ${b}: ${nf.format(c.base)} → verschil ${c.diff>0?"+":""}${nf.format(c.diff)}; ${pct}; z = ${nf.format(+(c.z.toFixed(2)))}`;
+  return `${a}: ${nf.format(c.cur)} t.o.v. ${b}: ${nf.format(c.base)} → verschil ${c.diff>0?"+":""}${nf.format(c.diff)}; ${pct}; z = ${nf2.format(c.z)}`;
 }
+const windowLabel = (end, n) => n===1 ? labLong(end) : `${lab(end-n+1)} t/m ${lab(end)}`;
 
-function windowLabel(end, n){
-  return n===1 ? labLong(end) : `${lab(end-n+1)} t/m ${lab(end)}`;
-}
-
-function analyse(series, span, latest){
-  const m = series.months;
+function analyse(s, span, latest){
+  const m = s.months;
   if(span==="Y"){
-    // laatste volledige kalenderjaar: het jaar waarvan december beschikbaar is
     const latestYear = (latest%12===11) ? Math.floor(latest/12) : Math.floor(latest/12)-1;
-    const end = latestYear*12+11;
-    const cur = sumWin(m,end,12), prev = sumWin(m,end-12,12);
-    return {
-      total: cur, period: `kalenderjaar ${latestYear}`,
-      yoy: {c: compare(cur,prev), a:String(latestYear), b:String(latestYear-1), title:`t.o.v. ${latestYear-1}`},
-      seq: null
-    };
+    const yearVal = y => { const v = sumWin(m, y*12+11, 12); return v!=null ? v : (s.years.get(y) ?? null); };
+    const cur = yearVal(latestYear), prev = yearVal(latestYear-1);
+    return { total: cur, period: `kalenderjaar ${latestYear}`,
+      yoy: {c: compare(cur,prev), a:String(latestYear), b:String(latestYear-1), title:`t.o.v. ${latestYear-1}`}, seq: null };
   }
   const n = +span;
-  const cur = sumWin(m,latest,n), yoy = sumWin(m,latest-12,n), prev = sumWin(m,latest-n,n);
-  return {
-    total: cur, period: windowLabel(latest,n),
-    yoy: {c: compare(cur,yoy), a:windowLabel(latest,n), b:windowLabel(latest-12,n), title:"t.o.v. zelfde periode vorig jaar"},
-    seq: n===12 ? null : {c: compare(cur,prev), a:windowLabel(latest,n), b:windowLabel(latest-n,n), title:"t.o.v. voorgaande periode"}
-  };
+  const cur = sumWin(m,latest,n);
+  return { total: cur, period: windowLabel(latest,n),
+    yoy: {c: compare(cur, sumWin(m,latest-12,n)), a:windowLabel(latest,n), b:windowLabel(latest-12,n), title:"t.o.v. zelfde periode vorig jaar"},
+    seq: n===12 ? null : {c: compare(cur, sumWin(m,latest-n,n)), a:windowLabel(latest,n), b:windowLabel(latest-n,n), title:"t.o.v. voorgaande periode"} };
 }
 
-function card(name, color, res, crime){
+const rateOf = (total, pop) => (total!=null && pop) ? total / pop.n * 1000 : null;
+
+function card(item, res, crime, measureName){
   const el = document.createElement("article");
-  el.className="panel card";
+  el.className = "panel card";
+  const head = `<h2><span class="dot" style="background:${item.color}"></span>${item.name}</h2>`;
   if(res.total==null){
-    el.innerHTML = `<h2><span class="dot" style="background:${color}"></span>${name}</h2>
-      <div class="sub">${crime}</div>
-      <p class="note">Voor deze combinatie publiceert de politie geen maandcijfers (verborgen of onbekend). Zedendelicten, kinderporno, kinderprostitutie en maatschappelijke integriteit (overig) staan in deze tabel niet per maand.</p>`;
+    el.innerHTML = `${head}<div class="sub">${crime} · ${measureName}</div>
+      <p class="note">Voor deze combinatie zijn geen cijfers over deze periode gepubliceerd. Zedendelicten, kinderporno, kinderprostitutie en maatschappelijke integriteit (overig) staan niet per maand in de tabellen. Op gemeenteniveau bestaan wel jaarcijfers: kies "Laatste volledige kalenderjaar".</p>`;
     return el;
   }
   const rowHTML = r => { if(!r) return ""; const v=verdict(r.c);
     return `<div class="row"><span>${r.title}</span><span class="pill ${v.cls}">${v.txt}</span><div class="calc">${calcLine(r.c,r.a,r.b)}</div></div>`; };
+  const rate = rateOf(res.total, item.pop);
+  const rateHTML = rate!=null
+    ? `<div class="rate">${nf2.format(rate)} per 1.000 inwoners</div><div class="row" style="border:0;padding:0"><div class="calc">${nf.format(res.total)} / ${nf.format(item.pop.n)} inwoners (${item.pop.label}) × 1.000 = ${nf2.format(rate)}</div></div>`
+    : (item.level==="gemeente" ? `<p class="note">Inwonertal niet beschikbaar; geen cijfer per 1.000 inwoners.</p>` : "");
   const small = res.total < 20 ? `<p class="note">Klein aantal. Procentuele veranderingen zeggen hier weinig; let op de z-waarde.</p>` : "";
-  el.innerHTML = `<h2><span class="dot" style="background:${color}"></span>${name}</h2>
-    <div class="sub">${crime} · ${res.period}</div>
+  el.innerHTML = `${head}<div class="sub">${crime} · ${res.period}</div>
     <div class="big">${nf.format(res.total)}</div>
-    <div class="lbl" style="margin-top:6px">geregistreerde misdrijven</div>
+    <div class="lbl" style="margin-top:6px">${measureName.toLowerCase()}</div>
+    ${rateHTML}
     <div class="rows">${rowHTML(res.yoy)}${rowHTML(res.seq)}</div>${small}`;
   return el;
 }
 
-function drawChart(list, latest){
-  const start = latest-23, W=900, H=260, L=44, R=12, T=12, B=30;
-  const xs = i => L + (i-start)/(23)*(W-L-R);
+function summary(items, results, measureName){
+  const box = $("summary");
+  if(items.length<2 || results.some(r=>r.total==null)){ box.hidden = true; return; }
+  const [A,B] = items, [ra, rb] = results;
+  const rA = rateOf(ra.total, A.pop), rB = rateOf(rb.total, B.pop);
+  let html;
+  if(rA!=null && rB!=null && rB>0){
+    const ratio = rA/rB;
+    const hi = ratio>=1 ? A.name : B.name, lo = ratio>=1 ? B.name : A.name, f = ratio>=1 ? ratio : 1/ratio;
+    html = `<div class="lbl" style="margin-bottom:6px">Vergelijking per 1.000 inwoners · ${ra.period}</div>
+      ${Math.abs(f-1)<0.005 ? `${A.name} en ${B.name} liggen gelijk.` : `${hi} ligt ${nf2.format(f)} keer zo hoog als ${lo}.`}
+      <div class="calc">${A.name}: ${nf2.format(rA)} · ${B.name}: ${nf2.format(rB)} → ${nf2.format(Math.max(rA,rB))} / ${nf2.format(Math.min(rA,rB))} = ${nf2.format(f)}</div>`;
+  } else {
+    html = `<div class="lbl" style="margin-bottom:6px">Vergelijking · ${ra.period}</div>
+      ${A.name}: ${nf.format(ra.total)}, ${B.name}: ${nf.format(rb.total)} ${measureName.toLowerCase()}.
+      <div class="calc">Geen inwonertallen voor woonplaatsen. Absolute aantallen van plaatsen met verschillende omvang zijn niet één op één vergelijkbaar; vergelijk de procentuele ontwikkeling.</div>`;
+  }
+  box.innerHTML = html; box.hidden = false;
+}
+
+function niceStep(x){ if(x<=0) return 1; const p=Math.pow(10,Math.floor(Math.log10(x))); const f=x/p; return (f<=1?1:f<=2?2:f<=5?5:10)*p; }
+function drawChart(items, latest, perCapita){
+  const start = latest-23, W=900, H=260, L=52, R=12, T=12, B=30;
+  const xs = i => L + (i-start)/23*(W-L-R);
+  const val = (it,i) => { const v = it.months.get(i); if(v==null) return null; return perCapita ? v/it.pop.n*1000 : v; };
   let max = 0;
-  list.forEach(s=>{ for(let i=start;i<=latest;i++){ const v=s.series.months.get(i); if(v!=null && v>max) max=v; }});
+  items.forEach(it=>{ for(let i=start;i<=latest;i++){ const v=val(it,i); if(v!=null && v>max) max=v; }});
   if(max===0){ $("chartPanel").hidden=true; return; }
-  const step = niceStep(max/4), top = Math.ceil(max/step)*step;
+  const step = niceStep(max/4), top = Math.ceil(max/step - 1e-9)*step;
+  const fmt = perCapita ? nf2 : nf;
   const ys = v => T + (1 - v/top)*(H-T-B);
   let g = "";
-  for(let v=0; v<=top; v+=step){
-    g += `<line x1="${L}" x2="${W-R}" y1="${ys(v)}" y2="${ys(v)}" stroke="var(--line)" stroke-width="1"/>`;
-    g += `<text x="${L-6}" y="${ys(v)+4}" text-anchor="end">${nf.format(v)}</text>`;
+  for(let k=0; k*step <= top + 1e-9; k++){
+    const v = k*step;
+    g += `<line x1="${L}" x2="${W-R}" y1="${ys(v)}" y2="${ys(v)}" stroke="var(--line)" stroke-width="1"/><text x="${L-6}" y="${ys(v)+4}" text-anchor="end">${fmt.format(v)}</text>`;
   }
-  for(let i=start;i<=latest;i+=3){
-    g += `<text x="${xs(i)}" y="${H-10}" text-anchor="middle">${lab(i)}</text>`;
-  }
-  list.forEach(s=>{
+  for(let i=start;i<=latest;i+=3) g += `<text x="${xs(i)}" y="${H-10}" text-anchor="middle">${lab(i)}</text>`;
+  items.forEach(it=>{
     let d="", pen=false;
     for(let i=start;i<=latest;i++){
-      const v=s.series.months.get(i);
-      if(v==null){ pen=false; continue; }
+      const v=val(it,i); if(v==null){ pen=false; continue; }
       d += (pen?"L":"M") + xs(i).toFixed(1) + " " + ys(v).toFixed(1) + " "; pen=true;
     }
-    g += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.2" stroke-linejoin="round"/>`;
-    const lv = s.series.months.get(latest);
-    if(lv!=null) g += `<circle cx="${xs(latest)}" cy="${ys(lv)}" r="4" fill="${s.color}"/>`;
+    g += `<path d="${d}" fill="none" stroke="${it.color}" stroke-width="2.2" stroke-linejoin="round"/>`;
+    const lv = val(it,latest);
+    if(lv!=null) g += `<circle cx="${xs(latest)}" cy="${ys(lv)}" r="4" fill="${it.color}"/>`;
   });
-  $("chart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:560px" role="img" aria-label="Lijngrafiek misdrijven per maand">${g}</svg>`;
-  $("legend").innerHTML = list.map(s=>`<span><span class="dot" style="background:${s.color}"></span>${s.name}</span>`).join("");
+  $("chart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:560px" role="img" aria-label="Lijngrafiek per maand">${g}</svg>`;
+  $("legend").innerHTML = items.map(s=>`<span><span class="dot" style="background:${s.color}"></span>${s.name}</span>`).join("");
+  $("chartTitle").textContent = `Verloop per maand, ${lab(start)} t/m ${lab(latest)}` + (perCapita ? ", per 1.000 inwoners" : ", absolute aantallen");
   $("chartPanel").hidden=false;
 }
-function niceStep(x){ const p=Math.pow(10,Math.floor(Math.log10(x||1))); const f=x/p; return (f<=1?1:f<=2?2:f<=5?5:10)*p; }
 
 async function run(){
-  const keyA = resolvePlace($("placeA").value);
+  const lv = level(), L = LEVELS[lv];
+  const keyA = resolvePlace(lv, $("placeA").value);
   const useB = $("cmp").checked;
-  const keyB = useB ? resolvePlace($("placeB").value) : null;
-  if(!keyA){ setStatus("Plaats niet gevonden in de politiedata. Kies een naam uit de lijst.", true); return; }
-  if(useB && !keyB){ setStatus("Tweede plaats niet gevonden in de politiedata. Kies een naam uit de lijst.", true); return; }
-  const crimeKey = $("crime").value, span = $("span").value;
+  const keyB = useB ? resolvePlace(lv, $("placeB").value) : null;
+  const what = L.label.toLowerCase();
+  if(!keyA){ setStatus(`Deze ${what} staat niet in de politiedata. Kies een naam uit de lijst.`, true); return; }
+  if(useB && !keyB){ setStatus(`De tweede ${what} staat niet in de politiedata. Kies een naam uit de lijst.`, true); return; }
+  const crimeKey = $("crime").value, span = $("span").value, measure = $("measure").value;
+  const measureName = L.measures.find(m=>m[0]===measure)[1];
   const fromYear = new Date().getFullYear() - 3;
   setStatus("Cijfers ophalen…");
   try{
-    const reqs = [fetchSeries(keyA, crimeKey, fromYear)];
-    if(keyB) reqs.push(fetchSeries(keyB, crimeKey, fromYear));
-    const res = await Promise.all(reqs);
-    // laatste maand met een waarde, over alle opgehaalde reeksen
-    let latest = -1;
-    res.forEach(s=>s.months.forEach((v,k)=>{ if(v!=null && k>latest) latest=k; }));
-    const cards = $("cards"); cards.innerHTML="";
+    const keys = keyB ? [keyA, keyB] : [keyA];
+    const series = await Promise.all(keys.map(k => fetchSeries(lv, k, crimeKey, fromYear)));
+    const colors = ["var(--a)","var(--b)"];
+    const items = keys.map((k,i)=>({key: k, name: placeLists[lv].labelByKey.get(k), color: colors[i], level: lv, pop: null,
+      months: series[i][measure].months, years: series[i][measure].years}));
+    // laatste maand met een waarde voor deze meetwaarde, over beide plaatsen
+    let latest = -1, latestMis = -1;
+    items.forEach(it=>it.months.forEach((v,k)=>{ if(v!=null && k>latest) latest=k; }));
+    series.forEach(s=>s.GeregistreerdeMisdrijven_1.months.forEach((v,k)=>{ if(v!=null && k>latestMis) latestMis=k; }));
     const crime = crimeTitle.get(crimeKey) || crimeKey;
-    const list = [{name:placeLabelByKey.get(keyA), color:"var(--a)", series:res[0]}];
-    if(keyB) list.push({name:placeLabelByKey.get(keyB), color:"var(--b)", series:res[1]});
+    const cards = $("cards"); cards.innerHTML = "";
     if(latest<0){
-      list.forEach(s=>cards.appendChild(card(s.name,s.color,{total:null},crime)));
-      $("chartPanel").hidden=true;
-      setStatus("Geen maandcijfers beschikbaar voor deze selectie.");
-      return;
+      // alleen jaarcijfers (verborgen delicten) of geen data
+      let anyYear = -1; items.forEach(it=>it.years.forEach((v,y)=>{ if(v!=null && y>anyYear) anyYear=y; }));
+      if(anyYear>0 && span==="Y"){
+        latest = anyYear*12+11;
+      } else {
+        items.forEach(it=>cards.appendChild(card(it,{total:null},crime,measureName)));
+        $("chartPanel").hidden = true; $("summary").hidden = true;
+        setStatus(anyYear>0 ? `Voor dit delict zijn alleen jaarcijfers gepubliceerd. Kies "Laatste volledige kalenderjaar".` : "Geen cijfers beschikbaar voor deze selectie.");
+        return;
+      }
     }
-    list.forEach(s=>cards.appendChild(card(s.name, s.color, analyse(s.series, span, latest), crime)));
-    drawChart(list, latest);
-    setStatus(`Laatst gepubliceerde maand: ${labLong(latest)}. Opgehaald ${new Date().toLocaleString("nl-NL")}.`);
+    if(lv==="gemeente"){
+      const pops = await Promise.all(items.map(it => population(it.key, span, latest)));
+      items.forEach((it,i)=> it.pop = pops[i]);
+    }
+    const results = items.map(it => analyse(it, span, latest));
+    items.forEach((it,i)=>cards.appendChild(card(it, results[i], crime, measureName)));
+    summary(items, results, measureName);
+    const perCapita = lv==="gemeente" && items.every(it=>it.pop);
+    if(items.some(it=>it.months.get(latest)!=null)) drawChart(items, latest, perCapita); else $("chartPanel").hidden = true;
+    let msg = `${measureName}: laatst gepubliceerde maand ${labLong(latest)}.`;
+    if(latestMis>latest) msg += ` Let op: geregistreerde misdrijven zijn al bijgewerkt t/m ${labLong(latestMis)}; deze meetwaarde loopt achter.`;
+    if(perCapita) msg += ` Inwoners: ${items[0].pop.label} (CBS).`;
+    setStatus(msg);
   }catch(e){
     setStatus("Ophalen mislukt (" + e.message + "). Probeer het opnieuw.", true);
   }
 }
 
+async function init(){
+  fillSelect($("crime"), CRIMES);
+  const route = await pickRoute();
+  try{
+    await applyLevel();
+    setStatus(`Gegevens geladen (${route}).`);
+    run();
+  }catch(e){
+    setStatus("Je browser kan de politie-API niet rechtstreeks bereiken (" + e.message + "). Dit is meestal de CORS-beveiliging van de browser. Oplossing: start de app met 'python3 server.py' (Windows: 'py server.py') in de map van dit bestand en open http://localhost:8000.", true);
+  }
+}
+
 $("f").addEventListener("submit", e=>{ e.preventDefault(); run(); });
 $("cmp").addEventListener("change", ()=>{ $("placeB").disabled = !$("cmp").checked; });
+document.querySelectorAll("input[name=level]").forEach(r=>r.addEventListener("change", async ()=>{
+  setStatus("Lijst laden…");
+  try{ await applyLevel(); run(); }catch(e){ setStatus("Lijst laden mislukt (" + e.message + ").", true); }
+}));
 init();
 </script>
 </body>
