@@ -16,6 +16,17 @@ Op Windows: `py server.py`. De app opent op http://localhost:8000. Stoppen met C
 
 Zonder `server.py` (bijvoorbeeld via GitHub Pages) probeert de app de API rechtstreeks. Of dat werkt, hangt af van de CORS-instellingen van de API en is niet getest.
 
+## Online zetten (klikbare link)
+
+GitHub Pages werkt niet goed voor deze app, omdat server.py daar niet draait en de browser de politie-API dan rechtstreeks moet aanroepen. Netlify kan de doorgeefrol van server.py overnemen; de instellingen staan in `netlify.toml`.
+
+1. Ga naar https://app.netlify.com en log in met je GitHub-account.
+2. Kies *Add new site* > *Import an existing project* > *GitHub* en selecteer deze repository.
+3. Laat alle instellingen leeg en klik *Deploy*.
+4. Pas eventueel de naam aan via *Site configuration* > *Change site name*, bijvoorbeeld `misdrijven-per-plaats`. De app staat dan op https://misdrijven-per-plaats.netlify.app.
+
+Elke push naar `main` zet Netlify automatisch opnieuw online.
+
 ## Bron
 
 - Woonplaats: tabel 47015NED, *Geregistreerde misdrijven; soort misdrijf, plaats*: https://data.politie.nl/#/Politie/nl/dataset/47015NED/table

@@ -1,0 +1,24 @@
+# Configuratie voor Netlify. Netlify serveert de app en geeft verzoeken onder
+# /odata/ door aan de bron-API's, net als server.py lokaal doet. Zo speelt de
+# CORS-blokkade van de browser geen rol.
+
+[build]
+  publish = "."
+
+[[redirects]]
+  from = "/odata/47015NED/*"
+  to = "https://dataderden.cbs.nl/ODataApi/OData/47015NED/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/odata/47013NED/*"
+  to = "https://dataderden.cbs.nl/ODataApi/OData/47013NED/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/odata/03759ned/*"
+  to = "https://opendata.cbs.nl/ODataApi/OData/03759ned/:splat"
+  status = 200
+  force = true
